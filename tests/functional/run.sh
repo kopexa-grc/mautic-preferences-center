@@ -93,7 +93,7 @@ jq -e --argjson w "$webinars" --argjson c "$cid" '.contact.id == $c and .contact
     and .current.emails == true and ([.current.topics_unsubscribed[].name] == ["Webinars"])' <<<"$msg" >/dev/null \
   && pass "webhook: the change (Webinars off), its source and the current state" || { cat "$WORK/hooks.jsonl"; fail "webhook message"; }
 line="$(tail -1 "$WORK/hooks.jsonl")"
-[[ "$(jq -r .body <<<"$line" | openssl dgst -sha256 -hmac hook-secret -binary | base64)" == "$(jq -r .signature <<<"$line")" ]] \
+[[ "$(printf '%s' "$(jq -r .body <<<"$line")" | openssl dgst -sha256 -hmac hook-secret -binary | base64)" == "$(jq -r .signature <<<"$line")" ]] \
   && pass "signed with the webhook secret (Webhook-Signature: HMAC-SHA256)" || fail "webhook signature"
 count="$(hooks | wc -l)"; page; save "$updates" >/dev/null; sleep 1
 [[ "$(hooks | wc -l)" == "$count" ]] && pass "saving without a change sends nothing" || { hooks | tail -1; fail "webhook without a change"; }
