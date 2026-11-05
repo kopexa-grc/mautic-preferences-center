@@ -7,7 +7,7 @@ use MauticPlugin\KopexaPreferencesCenterBundle\Controller\LinkRequestController;
 return [
     'name'        => 'Preferences Center',
     'description' => 'Topics in the preference center: which categories appear, in which order, with which text. People request a link to their preferences by email. Webhook event when contacts change their preferences.',
-    'version'     => '0.1.0', // x-release-please-version
+    'version'     => '0.2.0', // x-release-please-version
     'author'      => 'Kopexa',
     'routes'      => [
         'public' => [

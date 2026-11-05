@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/kopexa-grc/mautic-preferences-center/compare/v0.1.0...v0.2.0) (2026-11-05)
+
+
+### Features
+
+* request a personal link to the preferences by email (/email/preferences) ([65eb19e](https://github.com/kopexa-grc/mautic-preferences-center/commit/65eb19e01bb167337926786320078fb0992cf009))
+
 ## 0.1.0 (2026-11-05)
 
 
