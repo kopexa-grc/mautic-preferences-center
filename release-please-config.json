@@ -15,7 +15,8 @@
           "type": "generic",
           "path": "Config/config.php"
         }
-      ]
+      ],
+      "initial-version": "0.1.0"
     }
   },
   "changelog-sections": [
