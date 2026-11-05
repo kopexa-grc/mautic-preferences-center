@@ -1,0 +1,35 @@
+{
+    "name": "kopexa/mautic-preferences-center",
+    "description": "Preference center for Mautic: choose which categories appear as topics, in which order and with which text, keep hidden topics untouched when contacts save, and notify other systems through Mautic webhooks when preferences change.",
+    "type": "mautic-plugin",
+    "license": "Apache-2.0",
+    "keywords": [
+        "mautic",
+        "plugin",
+        "preference center",
+        "unsubscribe",
+        "categories",
+        "webhook"
+    ],
+    "homepage": "https://github.com/kopexa-grc/mautic-preferences-center",
+    "support": {
+        "issues": "https://github.com/kopexa-grc/mautic-preferences-center/issues",
+        "source": "https://github.com/kopexa-grc/mautic-preferences-center",
+        "security": "https://github.com/kopexa-grc/mautic-preferences-center/security/policy"
+    },
+    "authors": [
+        {
+            "name": "Kopexa",
+            "homepage": "https://kopexa.com"
+        }
+    ],
+    "extra": {
+        "install-directory-name": "KopexaPreferencesCenterBundle"
+    },
+    "require": {
+        "php": "~8.4",
+        "ext-json": "*",
+        "mautic/core-lib": "^7.2"
+    },
+    "minimum-stability": "stable"
+}

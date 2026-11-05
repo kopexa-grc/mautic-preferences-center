@@ -1,0 +1,7 @@
+{
+    "name": "Preferences test",
+    "author": "Functional test",
+    "authorUrl": "https://example.com",
+    "builder": ["grapesjsbuilder"],
+    "features": ["page"]
+}

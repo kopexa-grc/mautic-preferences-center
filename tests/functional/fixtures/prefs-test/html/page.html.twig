@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ page is defined and page ? page.title : 'Preferences' }}</title>
+    {{ outputHeadDeclarations() }}
+</head>
+<body>
+    <div class="prefs">
+        {successmessage}
+        <div class="topics">{categorylist}</div>
+        <div class="emails">{channelfrequency}</div>
+        {saveprefsbutton}
+    </div>
+    {{ outputScripts('bodyClose') }}
+</body>
+</html>

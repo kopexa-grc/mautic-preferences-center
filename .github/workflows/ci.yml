@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: bin/check.sh
+        run: |
+          docker run --rm -v "$PWD:/p" -w /p --entrypoint bash \
+            ghcr.io/kopexa-grc/php-apache:8.4-dev bin/check.sh
+
+  # A real Mautic 7 (composer create-project) with this plugin installed from
+  # the checkout, MariaDB, PHP's built-in web server; tests/functional/run.sh
+  # exercises the plugin over HTTP. On every PHP version we support.
+  functional:
+    name: functional (PHP ${{ matrix.php }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: mautic
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: bundle
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: bcmath, curl, exif, fileinfo, gd, iconv, intl, mbstring, openssl, pdo_mysql, sockets, sodium, xml, zip
+          ini-values: memory_limit=-1
+          coverage: none
+          tools: composer:v2
+      - name: Mautic 7 with this plugin
+        run: |
+          name="$(jq -r .name bundle/composer.json)"; version="$(tr -d '[:space:]' < bundle/VERSION)"
+          composer create-project --no-dev --no-interaction --no-progress --ignore-platform-req=ext-imap \
+            "mautic/recommended-project:^7.2" mautic
+          cd mautic
+          composer config --no-plugins allow-plugins.php-http/discovery false
+          composer config repositories.bundle "{\"type\": \"path\", \"url\": \"../bundle\", \"options\": {\"symlink\": false, \"versions\": {\"$name\": \"$version\"}}}"
+          composer require --no-progress --update-no-dev --ignore-platform-req=ext-imap "$name:$version"
+          composer show "$name" | head -3
+      - name: tests/functional/run.sh
+        env:
+          MAUTIC_DIR: ${{ github.workspace }}/mautic
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: mautic
+          DB_USER: root
+          DB_PASSWORD: root
+        run: bundle/tests/functional/run.sh
