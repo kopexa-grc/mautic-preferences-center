@@ -22,6 +22,17 @@ can be given:
 The look of the page comes from your theme; the plugin ships none (see
 [Themes](#themes)).
 
+<p>
+  <img src="docs/img/preference-page.png" alt="Preference page: three topics with their texts, all emails, save" width="300">
+  &nbsp;
+  <img src="docs/img/category-settings.png" alt="Category form with the section Preference center: Show as topic, Position, Text for contacts" width="420">
+</p>
+
+*Left: the preference page contacts open from an email (here in the
+[Kopexa theme](https://github.com/kopexa-grc/mautic-stack/tree/main/image/extensions/mautic-theme-kopexa-preferences));
+the plugin decides which topics appear, in which order and with which text.
+Right: the settings per category in Mautic.*
+
 ## Install
 
 ```bash
@@ -31,6 +42,8 @@ php bin/console mautic:plugins:reload
 
 Requires Mautic 7.2+ and PHP 8.4+. The plugin creates its table
 (`preferences_center_topics`) on first use and changes no Mautic table.
+It loads nothing from other hosts: no fonts, scripts or images (the page
+is styled by your theme).
 
 ## Topics
 
@@ -64,7 +77,11 @@ Requests without `preferencesCenter` leave the settings alone.
 In *Settings → Webhooks*, create a webhook with the event *Contact email
 preferences changed* (`kopexa.preferences_center.preferences_changed`),
 the URL of the receiving system and a secret. Mautic sends, retries and
-logs it like its own webhooks. Example body:
+logs it like its own webhooks.
+
+![The event in Mautic's webhook form](docs/img/webhook-event.png)
+
+Example body:
 
 ```json
 {
