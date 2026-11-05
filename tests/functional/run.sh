@@ -175,3 +175,12 @@ request_link prefs@example.com >/dev/null; request_link prefs@example.com >/dev/
 [[ "$(request_link prefs@example.com)" == 429 ]] && grep -q 'Zu viele Anfragen' "$WORK/lr-post.html" \
   && pass "at most 3 requests per address and hour" || fail "rate limit"
 [[ "$(request_link other@example.com forged)" == 400 ]] && pass "form without a valid token refused" || fail "csrf"
+
+echo "Links of test emails (signed with the address, no statistics)"
+secret="$(php -r 'include $argv[1]."/config/local.php"; echo $parameters["secret_key"];' "$MAUTIC_DIR")"
+sig="$(php -r 'echo hash_hmac("sha256", $argv[1], $argv[2]);' prefs@example.com "$secret")"
+read -r code location < <(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/email/unsubscribe/example/prefs@example.com/$sig")
+[[ "$code" == 302 && "$location" == "$BASE/email/unsubscribe/"* ]] && curl -s "$location" | grep -q 'pref-topic-name">Webinars<' \
+  && pass "a test email's link opens the preference page (not Mautic's plain form)" || { echo "$code $location"; fail "signed link"; }
+[[ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/email/unsubscribe/example/prefs@example.com/${sig%?}0")" != 302 ]] \
+  && pass "a wrong signature is left to Mautic" || fail "wrong signature redirected"

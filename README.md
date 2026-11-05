@@ -18,6 +18,9 @@ can be given:
 - **A link by email.** Without an email at hand (e.g. a link on your
   website), people enter their address at `/email/preferences` and get a
   personal link to their preferences. Only who reads the mailbox gets in.
+- **Test emails show the real page too.** Links of emails sent without
+  statistics (*Send example*, test sends) open Mautic's plain built-in form;
+  the plugin sends them to the preference page like any other email.
 - **Setup as code.** `preferences-center:sync` creates the topics, the
   preference page and Mautic's unsubscribe settings from a JSON declaration;
   idempotent, for every deploy.
