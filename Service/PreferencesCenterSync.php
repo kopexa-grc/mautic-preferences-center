@@ -10,6 +10,8 @@ use Mautic\CoreBundle\Configurator\Configurator;
 use Mautic\CoreBundle\Helper\CoreParametersHelper;
 use Mautic\CoreBundle\Helper\LanguageHelper;
 use Mautic\CoreBundle\Helper\ThemeHelperInterface;
+use Mautic\EmailBundle\Entity\Email;
+use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\PageBundle\Entity\Page;
 use Mautic\PageBundle\Model\PageModel;
 
@@ -31,7 +33,8 @@ use Mautic\PageBundle\Model\PageModel;
  */
 class PreferencesCenterSync
 {
-    private const KEYS       = ['topics', 'hideOtherTopics', 'page', 'frequency', 'pauseDates', 'systemTheme'];
+    private const KEYS       = ['topics', 'hideOtherTopics', 'page', 'frequency', 'pauseDates', 'systemTheme', 'linkRequest'];
+    private const LINK_KEYS  = ['locale', 'email', 'buttonColor', 'redirect'];
     private const TOPIC_KEYS = ['name', 'text', 'visible'];
     private const PAGE_KEYS  = ['title', 'alias', 'theme', 'language', 'updateContent'];
     private const TOKENS     = ['{categorylist}', '{saveprefsbutton}'];
@@ -44,11 +47,12 @@ class PreferencesCenterSync
         private readonly CoreParametersHelper $parameters,
         private readonly LanguageHelper $languages,
         private readonly TopicStore $topics,
+        private readonly EmailModel $emails,
     ) {
     }
 
     /**
-     * @return array{topics: list<array{name: string, text: string|null, visible: bool}>, hideOtherTopics: bool, page: array{title: string, alias: string, theme: string, language: string, updateContent: bool}|null, frequency: bool, pauseDates: bool, systemTheme: string}
+     * @return array{topics: list<array{name: string, text: string|null, visible: bool}>, hideOtherTopics: bool, page: array{title: string, alias: string, theme: string, language: string, updateContent: bool}|null, frequency: bool, pauseDates: bool, systemTheme: string, linkRequest: array{locale: string, email: int, buttonColor: string, redirect: bool}|null}
      *
      * @throws \InvalidArgumentException listing every invalid value
      */
@@ -124,6 +128,35 @@ class PreferencesCenterSync
         if ('' !== $systemTheme && !$this->themes->exists($systemTheme)) {
             $errors[] = "systemTheme: theme \"$systemTheme\" is not installed";
         }
+        $link = null;
+        if (isset($data['linkRequest'])) {
+            $declared = is_array($data['linkRequest']) ? $data['linkRequest'] : [];
+            foreach (array_diff(array_keys($declared), self::LINK_KEYS) as $key) {
+                $errors[] = "linkRequest: unknown key \"$key\" (allowed: ".implode(', ', self::LINK_KEYS).')';
+            }
+            $link = [
+                'locale'      => trim((string) ($declared['locale'] ?? '')),
+                'email'       => 0,
+                'buttonColor' => trim((string) ($declared['buttonColor'] ?? '#1F2937')),
+                'redirect'    => false !== ($declared['redirect'] ?? true),
+            ];
+            if ('' !== $link['locale'] && 1 !== preg_match('/^[a-z]{2}(_[A-Z]{2})?$/', $link['locale'])) {
+                $errors[] = 'linkRequest.locale: a locale like de or en_US';
+            }
+            if (1 !== preg_match('/^#[0-9A-Fa-f]{6}$/', $link['buttonColor'])) {
+                $errors[] = 'linkRequest.buttonColor: a colour like #006CB8';
+            }
+            if (isset($declared['email']) && '' !== (string) $declared['email']) {
+                $email = $this->findEmail((string) $declared['email']);
+                if (null === $email) {
+                    $errors[] = sprintf('linkRequest.email: no email "%s" (name or ID)', $declared['email']);
+                } elseif (!str_contains((string) $email->getCustomHtml(), '{unsubscribe_url}')) {
+                    $errors[] = sprintf('linkRequest.email: email "%s" has no {unsubscribe_url} (the personal link)', $email->getName());
+                } else {
+                    $link['email'] = (int) $email->getId();
+                }
+            }
+        }
         foreach (['hideOtherTopics', 'frequency', 'pauseDates'] as $key) {
             if (isset($data[$key]) && !is_bool($data[$key])) {
                 $errors[] = "$key: true or false";
@@ -141,11 +174,19 @@ class PreferencesCenterSync
             'frequency'       => true === ($data['frequency'] ?? false),
             'pauseDates'      => true === ($data['pauseDates'] ?? false),
             'systemTheme'     => $systemTheme,
+            'linkRequest'     => $link,
         ];
     }
 
+    private function findEmail(string $nameOrId): ?Email
+    {
+        $email = ctype_digit($nameOrId) ? $this->emails->getEntity((int) $nameOrId) : $this->emails->getRepository()->findOneBy(['name' => $nameOrId]);
+
+        return $email instanceof Email ? $email : null;
+    }
+
     /**
-     * @param array{topics: list<array{name: string, text: string|null, visible: bool}>, hideOtherTopics: bool, page: array{title: string, alias: string, theme: string, language: string, updateContent: bool}|null, frequency: bool, pauseDates: bool, systemTheme: string} $declared
+     * @param array{topics: list<array{name: string, text: string|null, visible: bool}>, hideOtherTopics: bool, page: array{title: string, alias: string, theme: string, language: string, updateContent: bool}|null, frequency: bool, pauseDates: bool, systemTheme: string, linkRequest: array{locale: string, email: int, buttonColor: string, redirect: bool}|null} $declared
      *
      * @return list<string> what was done, one line each
      */
@@ -317,7 +358,7 @@ class PreferencesCenterSync
         return null;
     }
 
-    /** @param array{frequency: bool, pauseDates: bool, systemTheme: string} $declared */
+    /** @param array{frequency: bool, pauseDates: bool, systemTheme: string, linkRequest: array{locale: string, email: int, buttonColor: string, redirect: bool}|null} $declared */
     private function syncSettings(array $declared, ?int $pageId, bool $dryRun): string
     {
         $wanted = [
@@ -334,11 +375,19 @@ class PreferencesCenterSync
         if ('' !== $declared['systemTheme']) {
             $wanted['theme'] = $declared['systemTheme'];
         }
+        if (null !== $declared['linkRequest']) {
+            $wanted += [
+                'preferences_center_locale'        => $declared['linkRequest']['locale'],
+                'preferences_center_link_email'    => $declared['linkRequest']['email'],
+                'preferences_center_button_color'  => $declared['linkRequest']['buttonColor'],
+                'preferences_center_page_redirect' => $declared['linkRequest']['redirect'],
+            ];
+        }
 
         $changed = [];
         foreach ($wanted as $key => $value) {
             $current = $this->parameters->get($key);
-            if ('email_default_preference_center_id' === $key ? (int) $current !== $value : $current !== $value) {
+            if (in_array($key, ['email_default_preference_center_id', 'preferences_center_link_email'], true) ? (int) $current !== $value : $current !== $value) {
                 $changed[$key] = $value;
             }
         }

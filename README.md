@@ -15,6 +15,9 @@ can be given:
   preferences changed* in Mautic's webhooks: one message per contact with
   what changed (topics, all emails) and the current state, from the
   preference page, one-click unsubscribe, re-subscribe, the admin or the API.
+- **A link by email.** Without an email at hand (e.g. a link on your
+  website), people enter their address at `/email/preferences` and get a
+  personal link to their preferences. Only who reads the mailbox gets in.
 - **Setup as code.** `preferences-center:sync` creates the topics, the
   preference page and Mautic's unsubscribe settings from a JSON declaration;
   idempotent, for every deploy.
@@ -71,6 +74,38 @@ curl -u user:pass -X PATCH https://mautic.example.com/api/categories/5/edit \
 ```
 
 Requests without `preferencesCenter` leave the settings alone.
+
+## Link by email
+
+`https://<mautic>/email/preferences` asks for an email address and sends a
+personal link to the preference page, for a link on a website ("Email
+preferences") or when someone deleted all your emails.
+
+- **Same answer for every address.** Whether a contact has it or not, the
+  page says "If this address is on our list, we have just sent you a
+  link", so nobody can find out who is on your list. Unknown addresses get
+  no email, and no contact is created.
+- **Limits:** 3 requests per address and 10 per IP address within an hour
+  (`preferences_center_rate_email`, `preferences_center_rate_ip`), counted
+  for unknown addresses too and stored as hashes only. A CSRF token and a
+  hidden field keep simple bots out.
+- **The email** is a Mautic email, *Preferences center: link*, created on
+  first use (text in `preferences_center_locale`, button colour
+  `preferences_center_button_color`). Edit it in Mautic like any email, or
+  set `preferences_center_link_email` to the ID of your own; it needs
+  `{unsubscribe_url}`, the personal link. It goes out as a requested
+  service email: also to contacts who unsubscribed from all emails, so they
+  can come back.
+- **The default preference page** opened at its own address (e.g.
+  `/preferences`) knows no contact; such visits are sent to
+  `/email/preferences` (off: `preferences_center_page_redirect: false`).
+  Personal links and the builder preview are not affected.
+- The form uses the message layout of your system theme
+  (`html/message.html.twig`, like Mautic's unsubscribe pages) with the
+  classes `pc-request`, `pc-request-input`, `pc-request-button`,
+  `pc-request-error`. Texts in English and German (`de`).
+
+<p><img src="docs/img/link-request.png" alt="Link request: email address and Send link" width="300"></p>
 
 ## Webhooks
 
@@ -143,7 +178,8 @@ php bin/console preferences-center:sync --file preferences.json --dry-run
   "page": {"alias": "preferences", "title": "Email preferences", "theme": "my-preferences-theme"},
   "frequency": false,
   "pauseDates": false,
-  "systemTheme": "my-theme"
+  "systemTheme": "my-theme",
+  "linkRequest": {"locale": "de", "buttonColor": "#006CB8", "email": "My link email", "redirect": true}
 }
 ```
 
@@ -154,6 +190,7 @@ php bin/console preferences-center:sync --file preferences.json --dry-run
 | `page` | Optional. The preference page by `alias`, created once from `theme` (required; its page template must contain `{categorylist}` and `{saveprefsbutton}`), marked as preference center and published. Afterwards it is edited in Mautic; `"updateContent": true` re-creates its content from the theme. `language` only with an installed Mautic language. |
 | `frequency`, `pauseDates` | Also offer "fewer emails" / a pause. Default off. |
 | `systemTheme` | Theme of Mautic's system pages (unsubscribed, re-subscribed). |
+| `linkRequest` | Optional. The link by email: `locale` of page and email, `buttonColor` of the default email, `email` (name or ID of your own link email, must contain `{unsubscribe_url}`), `redirect` from the preference page (default true). |
 
 It also sets Mautic's unsubscribe settings: show the preferences with the
 topics (not segments), the page as default preference center for all
@@ -181,7 +218,8 @@ The unsubscribe and re-subscribe confirmations use the theme's
   (topic order).
 - `tests/functional/run.sh`: a real Mautic 7 (CI: Composer project,
   MariaDB, PHP 8.4 and 8.5) with this plugin. Sync (creation, second run
-  unchanged, validation), page (shown topics, order, text), saving
+  unchanged, validation), page (shown topics, order, text), link by email
+  (same answer, email with a working link, limits, token), saving
   (hidden topics stay on), webhooks (payload, source, signature, nothing on
   no change, one-click unsubscribe, re-subscribe), the category form and
   the API.

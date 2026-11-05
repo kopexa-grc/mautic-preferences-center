@@ -14,4 +14,7 @@ return function (ContainerConfigurator $configurator): void {
 
     $services->load('MauticPlugin\\KopexaPreferencesCenterBundle\\', '../')
         ->exclude('../{'.implode(',', array_merge(MauticCoreExtension::DEFAULT_EXCLUDES, ['Tests', 'DependencyInjection'])).'}');
+
+    $services->load('MauticPlugin\\KopexaPreferencesCenterBundle\\Controller\\', '../Controller')
+        ->tag('controller.service_arguments');
 };

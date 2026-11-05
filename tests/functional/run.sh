@@ -128,3 +128,50 @@ hooks | tail -1 | jq -e '.source == "one_click_unsubscribe" and .changes.emails 
 curl -s -o /dev/null "$BASE/email/resubscribe/$hash"; sleep 1
 hooks | tail -1 | jq -e '.source == "resubscribe" and .changes.emails.subscribed == true and .current.emails == true' >/dev/null \
   && pass "webhook on re-subscribe" || { hooks | tail -1; fail "re-subscribe webhook"; }
+
+echo "Link request: /email/preferences"
+SMTP_PORT=$((PORT + 21)); mkdir -p "$WORK/mails"
+(php "$HERE/smtp-sink.php" "$SMTP_PORT" "$WORK/mails" >"$WORK/smtp.log" 2>&1 &)
+set_params "{\"mailer_dsn\": \"smtp://127.0.0.1:$SMTP_PORT\", \"messenger_dsn_email\": \"sync://\", \"mailer_from_email\": \"news@example.com\", \"mailer_from_name\": \"Test\"}"
+out="$(console preferences-center:sync --json '{"topics":[{"name":"Webinars"}],"linkRequest":{"locale":"de","buttonColor":"#006CB8"}}' 2>&1)" || { echo "$out"; fail "sync linkRequest"; }
+grep -q 'preferences_center_locale' <<<"$out" && pass "linkRequest settings written by the sync" || { echo "$out"; fail "sync linkRequest settings"; }
+out="$(console preferences-center:sync --json '{"linkRequest":{"email":"No such email","buttonColor":"blue","colour":1}}' 2>&1)" && fail "invalid linkRequest accepted"
+grep -q 'linkRequest.email: no email "No such email"' <<<"$out" && grep -q 'linkRequest.buttonColor' <<<"$out" && grep -q 'linkRequest: unknown key "colour"' <<<"$out" \
+  && pass "invalid linkRequest refused" || { echo "$out"; fail "linkRequest validation"; }
+LR_JAR="$WORK/lr-jar"
+request_link() { # <address> [token]: posts the form like a browser, prints the HTTP status
+  local token
+  curl -s -c "$LR_JAR" -b "$LR_JAR" "$BASE/email/preferences" -o "$WORK/lr.html"
+  token="$(sed -n 's/.*name="_token" value="\([^"]*\)".*/\1/p' "$WORK/lr.html")"
+  curl -s -o "$WORK/lr-post.html" -w '%{http_code}' -c "$LR_JAR" -b "$LR_JAR" -X POST "$BASE/email/preferences" \
+    --data-urlencode "email=$1" --data-urlencode "_token=${2-$token}"
+}
+mails() { find "$WORK/mails" -name '*.eml' | wc -l; }
+[[ "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/preferences")" == "302 $BASE/email/preferences" ]] \
+  && pass "the preference page without a personal link redirects to the link request" || fail "page redirect"
+curl -s "$BASE/email/preferences" | grep -q 'Gib deine E-Mail-Adresse ein' && pass "form in the configured language (de)" || fail "link request form"
+[[ "$(request_link nobody@example.com)" == 200 ]] && grep -q 'Schau in dein Postfach' "$WORK/lr-post.html" && sleep 1 && [[ "$(mails)" == 0 ]] \
+  && pass "unknown address: same answer, no email" || fail "unknown address"
+[[ "$(request_link PREFS@example.com)" == 200 ]] && grep -q 'Schau in dein Postfach' "$WORK/lr-post.html" && sleep 1 && [[ "$(mails)" == 1 ]] \
+  && pass "known address (any case): same answer, one email" || { cat "$WORK/smtp.log"; fail "known address"; }
+mail="$(find "$WORK/mails" -name '*.eml' | sort | head -1)"
+read -r subject link < <(python3 - "$mail" <<'PY'
+import email, re, sys
+from email.header import decode_header, make_header
+m = email.message_from_binary_file(open(sys.argv[1], 'rb'))
+html = ''.join(p.get_payload(decode=True).decode() for p in m.walk() if p.get_content_type() == 'text/html')
+links = re.findall(r'href="(https?://[^"]*/email/unsubscribe/[^"]+)"', html)
+print(str(make_header(decode_header(m['Subject']))).replace(' ', '_'), links[0] if links else '')
+PY
+)
+grep -qi '^To: .*prefs@example.com' "$mail" && [[ "$subject" == "Dein_Link_zu_deinen_E-Mail-Einstellungen" ]] && [[ -n "$link" ]] \
+  && pass "email to the contact with a personal link (subject in German)" || { echo "subject=$subject link=$link"; head -c 1500 "$mail"; fail "link email"; }
+curl -s "$link" -o "$WORK/via-link.html"
+grep -q 'pref-topic-name">Webinars<' "$WORK/via-link.html" \
+  && pass "the link opens the preference page of that contact" || { head -c 800 "$WORK/via-link.html"; fail "link opens page"; }
+[[ "$(db "SELECT COUNT(*) FROM emails WHERE name = 'Preferences center: link' AND is_published = 1")" == 1 ]] \
+  && pass "sent as the Mautic email \"Preferences center: link\" (editable in Mautic)" || fail "link email entity"
+request_link prefs@example.com >/dev/null; request_link prefs@example.com >/dev/null
+[[ "$(request_link prefs@example.com)" == 429 ]] && grep -q 'Zu viele Anfragen' "$WORK/lr-post.html" \
+  && pass "at most 3 requests per address and hour" || fail "rate limit"
+[[ "$(request_link other@example.com forged)" == 400 ]] && pass "form without a valid token refused" || fail "csrf"
