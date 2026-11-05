@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/kopexa-grc/mautic-preferences-center/compare/v0.2.0...v0.2.1) (2026-11-05)
+
+
+### Bug fixes
+
+* links of test emails open the preference page instead of Mautic's plain form ([49851b4](https://github.com/kopexa-grc/mautic-preferences-center/commit/49851b45b81eaeba33c1775f8e622ae9c66b76fd))
+
 ## [0.2.0](https://github.com/kopexa-grc/mautic-preferences-center/compare/v0.1.0...v0.2.0) (2026-11-05)
 
 
