@@ -179,7 +179,7 @@ request_link prefs@example.com >/dev/null; request_link prefs@example.com >/dev/
 echo "Links of test emails (signed with the address, no statistics)"
 secret="$(php -r 'include $argv[1]."/config/local.php"; echo $parameters["secret_key"];' "$MAUTIC_DIR")"
 sig="$(php -r 'echo hash_hmac("sha256", $argv[1], $argv[2]);' prefs@example.com "$secret")"
-read -r code location < <(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/email/unsubscribe/example/prefs@example.com/$sig")
+read -r code location < <(curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "$BASE/email/unsubscribe/example/prefs@example.com/$sig")
 [[ "$code" == 302 && "$location" == "$BASE/email/unsubscribe/"* ]] && curl -s "$location" | grep -q 'pref-topic-name">Webinars<' \
   && pass "a test email's link opens the preference page (not Mautic's plain form)" || { echo "$code $location"; fail "signed link"; }
 [[ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/email/unsubscribe/example/prefs@example.com/${sig%?}0")" != 302 ]] \
